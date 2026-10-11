@@ -28,5 +28,6 @@
     "i18n"
   ],
   "homepage": "https://github.com/eddundead/claude-poker",
-  "repository": "https://github.com/eddundead/claude-poker"
+  "repository": "https://github.com/eddundead/claude-poker",
+  "license": "MIT"
 }

@@ -6,9 +6,10 @@
 ![Texas Hold'em](https://img.shields.io/badge/game-Texas%20Hold'em-2e7d32)
 ![10 languages](https://img.shields.io/badge/languages-10-blue)
 ![No dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
+![MIT license](https://img.shields.io/badge/license-MIT-green)
 
 <p align="center">
-  <img src="docs/table.svg" alt="Claude Poker: an 8-bit poker table with five players in a Claude Code pane" width="640">
+  <img src="docs/table.png" alt="Claude Poker: an 8-bit poker table with five players in a Claude Code pane" width="640">
 </p>
 
 ## ✨ Features
@@ -28,8 +29,8 @@
 - 🔒 No dependencies, no network, no API key — it runs entirely inside Claude Code
 
 <p align="center">
-  <img src="docs/win.svg" alt="A YOU WIN banner with confetti over the poker table" width="420">
-  <img src="docs/menu.svg" alt="Claude Poker menu: logo, table setup and skill levels" width="420">
+  <img src="docs/win.png" alt="A YOU WIN banner with confetti over the poker table" width="420">
+  <img src="docs/menu.png" alt="Claude Poker menu: logo, table setup and skill levels" width="420">
 </p>
 
 ## 📦 Install
@@ -133,6 +134,10 @@ claude plugin validate .   # check the manifest and hooks
 claude plugin test .       # run the tests
 claude --plugin-dir .      # play your working copy
 ```
+
+## 📄 License
+
+[MIT](LICENSE) © Edd
 
 ---
 
