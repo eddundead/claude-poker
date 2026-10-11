@@ -361,7 +361,14 @@ export const register: Register = on => {
     const halfTo = Math.min(most, g.currentBet + Math.max(g.minRaise, Math.round((potNow + toCall) / 2)))
     const potTo = Math.min(most, g.currentBet + Math.max(g.minRaise, potNow + toCall))
     const canRaise = me.chips > toCall
-    const go = (action: Action) => change($, s => play(s, action))
+    const go = async (action: Action) => {
+      await update($, menu, v => ({ ...v, bet: null }))
+      await change($, s => play(s, action))
+    }
+    // The custom bet: a pending "raise to" amount, kept between minTo and the whole stack.
+    const clampBet = (n: number) => Math.min(most, Math.max(minTo, Math.round(n)))
+    const bet = clampBet(m.bet ?? minTo)
+    const setBet = (n: number) => update($, menu, v => ({ ...v, bet: clampBet(n) }))
     const isWide = width >= TABLE_WIDTH
     const boxWidth = isWide ? TABLE_WIDTH : width
     const odds = chance(g)
@@ -519,6 +526,35 @@ export const register: Register = on => {
               {!isMyTurn && !isDone && <Text dimColor>{t.waiting}</Text>}
               {!isDone && <Button key="quit" plain hotkey="q" dimColor label={t.quit} onPress={() => ask(true)} />}
             </Box>
+            )}
+            {isMyTurn && !isAsking && canRaise && minTo < most && (
+              <Box flexWrap="wrap" columnGap={2} alignItems="center">
+                {Input && (
+                  <Input
+                    key="bet"
+                    label={t.betTo}
+                    placeholder={`${minTo}–${most}`}
+                    value={String(bet)}
+                    onInput={(value: string) => {
+                      const n = Number(value.replace(/\D/g, ''))
+                      if (n > 0) void setBet(n)
+                    }}
+                    onSubmit={(value: string) => {
+                      const n = Number(value.replace(/\D/g, ''))
+                      void go({ kind: 'raise', to: clampBet(n > 0 ? n : bet) })
+                    }}
+                  />
+                )}
+                <Button key="bet-down" plain hotkey="z" label="−" dimColor={bet <= minTo} onPress={() => setBet(bet - g.bb)} />
+                <Button key="bet-up" plain hotkey="x" label="+" dimColor={bet >= most} onPress={() => setBet(bet + g.bb)} />
+                <Button
+                  key="bet-go"
+                  plain
+                  hotkey="b"
+                  label={`${t.betTo} ${bet}${bet >= most ? ` (${t.allIn})` : ''}`}
+                  onPress={() => go({ kind: 'raise', to: bet })}
+                />
+              </Box>
             )}
           </Box>
           <Box borderStyle="round" borderColor="subtle" flexDirection="column" paddingX={1}>

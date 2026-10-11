@@ -19,6 +19,7 @@
   - 🐣 **Beginner** — loose and passive calling stations that raise at random
   - 🧠 **Intermediate** — play their hand strength against the pot odds
   - 🦈 **Pro** — Monte Carlo equity, traps, semi-bluffs, and they adapt to how aggressive you are
+- ✏️ **Custom bets** — type any amount or step it by the big blind, on top of the quick fold / call / raise / pot / all-in keys
 - 📊 **Hand hint and win odds** — your current hand (`Pair of 9`, `A K suited`) and your chance to win against the players still in, with a colour bar
 - ⚙️ **Table setup** — your name, buy-in (500–10,000) and stakes (5/10 up to 100/200)
 - 🌍 **10 languages** — English, 中文, Español, Français, Deutsch, 日本語, Português, Русский, 한국어, Italiano (picked from `LANG`, switchable in the menu)
@@ -105,6 +106,9 @@ The pane looks best in Claude Code's fullscreen layout on a terminal at least 11
 | ½ `h` | raise half the pot |
 | 🪙 `p` | raise the pot |
 | 🔥 `a` | all-in |
+| ✏️ type + `Enter` | custom bet: type any amount in **Raise to** |
+| ➖ `z` / ➕ `x` | lower / raise your custom bet by one big blind |
+| 🎯 `b` | place your custom bet |
 | 📜 `k` / `j` | scroll the hand log up / down |
 | 🚪 `q` | quit to the menu (asks `y` / `n`) |
 | ▶️ `n` | next hand / new game |

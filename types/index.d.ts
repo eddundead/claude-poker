@@ -75,7 +75,7 @@ export type Game = {
   blindBase: number
 }
 
-export type Menu = { level: Level | null; isPickingLang?: boolean; isConfirmingQuit?: boolean; logFrom?: number | null }
+export type Menu = { level: Level | null; isPickingLang?: boolean; isConfirmingQuit?: boolean; logFrom?: number | null; bet?: number | null }
 
 /** The person's table setup, kept across sessions. */
 export type Settings = { lang: Lang; name: string; buyIn: number; sb: number }

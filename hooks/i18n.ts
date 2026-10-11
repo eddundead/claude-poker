@@ -37,6 +37,7 @@ export type Dict = {
   call: string
   allIn: string
   raise: string
+  betTo: string
   halfPot: string
   potButton: string
   next: string
@@ -120,6 +121,7 @@ const en: Dict = {
   call: 'Call',
   allIn: 'All-in',
   raise: 'Raise',
+  betTo: 'Raise to',
   halfPot: '½ pot',
   potButton: 'Pot',
   next: 'Next',
@@ -203,6 +205,7 @@ const zh: Dict = {
   call: '跟注',
   allIn: '全下',
   raise: '加注',
+  betTo: '加注到',
   halfPot: '半池',
   potButton: '满池',
   next: '继续',
@@ -286,6 +289,7 @@ const es: Dict = {
   call: 'Igualar',
   allIn: 'All-in',
   raise: 'Subir',
+  betTo: 'Subir a',
   halfPot: '½ bote',
   potButton: 'Bote',
   next: 'Siguiente',
@@ -369,6 +373,7 @@ const fr: Dict = {
   call: 'Suivre',
   allIn: 'Tapis',
   raise: 'Relancer',
+  betTo: 'Relancer à',
   halfPot: '½ pot',
   potButton: 'Pot',
   next: 'Suivant',
@@ -452,6 +457,7 @@ const de: Dict = {
   call: 'Call',
   allIn: 'All-in',
   raise: 'Raise',
+  betTo: 'Erhöhen auf',
   halfPot: '½ Pot',
   potButton: 'Pot',
   next: 'Weiter',
@@ -535,6 +541,7 @@ const ja: Dict = {
   call: 'コール',
   allIn: 'オールイン',
   raise: 'レイズ',
+  betTo: 'レイズ額',
   halfPot: '½ポット',
   potButton: 'ポット',
   next: '次へ',
@@ -618,6 +625,7 @@ const pt: Dict = {
   call: 'Pagar',
   allIn: 'All-in',
   raise: 'Aumentar',
+  betTo: 'Aumentar para',
   halfPot: '½ pote',
   potButton: 'Pote',
   next: 'Próxima',
@@ -701,6 +709,7 @@ const ru: Dict = {
   call: 'Колл',
   allIn: 'Олл-ин',
   raise: 'Рейз',
+  betTo: 'Ставка до',
   halfPot: '½ банка',
   potButton: 'Банк',
   next: 'Дальше',
@@ -784,6 +793,7 @@ const ko: Dict = {
   call: '콜',
   allIn: '올인',
   raise: '레이즈',
+  betTo: '레이즈 금액',
   halfPot: '½ 팟',
   potButton: '팟',
   next: '다음',
@@ -867,6 +877,7 @@ const it: Dict = {
   call: 'Chiama',
   allIn: 'All-in',
   raise: 'Rilancia',
+  betTo: 'Rilancia a',
   halfPot: '½ piatto',
   potButton: 'Piatto',
   next: 'Avanti',

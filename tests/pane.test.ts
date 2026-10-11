@@ -123,3 +123,27 @@ test('the log scrolls back and holds its place while the bots play on', async ($
   expect(Number(await at()) >= bottom).toBe(true)
   await ui.unmount()
 })
+
+test('a custom bet is typed or stepped, kept in range, and played', async ($, on) => {
+  mock.store(on)
+  const clock = mock.clock(on)
+  const ui = await $.ui.mount({ plugin: 'poker', surface: 'terminal', ...PANE })
+  await ui.press({ key: 'medium' })
+  await ui.press({ key: 'bots-1' })
+  for (let k = 0; k < 40 && !(await ui.find({ key: 'bet-go' })); k++) {
+    if (await ui.find({ key: 'next' })) await ui.press({ key: 'next' })
+    else await clock.advance(1500)
+  }
+  const label = async () => (await ui.find({ key: 'bet-go' }))?.text ?? ''
+  const start = Number((await label()).match(/(\d+)/)?.[1])
+  await ui.press({ key: 'bet-up' })
+  expect(await label()).toContain(String(start + 20))
+  await ui.press({ key: 'bet-down' })
+  await ui.press({ key: 'bet-down' })
+  expect(await label()).toContain(String(start))
+  await ui.input({ key: 'bet', text: '999999', kind: 'change' })
+  expect(await label()).toMatch(/All-in/)
+  await ui.input({ key: 'bet', text: '300' })
+  expect(await ui.find({ type: 'Text', text: /(raise to|bet) 300/ })).toBeDefined()
+  await ui.unmount()
+})
