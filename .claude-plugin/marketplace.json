@@ -1,6 +1,57 @@
 {
   "name": "claude-poker",
-  "owner": { "name": "ed" },
-  "description": "Техасский холдем в панели Claude Code",
-  "plugins": [{ "name": "poker", "source": "./" }]
+  "owner": {
+    "name": "Edd"
+  },
+  "description": "Claude Poker — 8-bit Texas Hold'em for Claude Code, by Edd",
+  "plugins": [
+    {
+      "name": "poker",
+      "source": "./",
+      "description": "8-bit Texas Hold'em in a Claude Code side pane: play while Claude codes",
+      "category": "games",
+      "keywords": [
+        "claude-code",
+        "claude-code-plugin",
+        "claude",
+        "anthropic",
+        "poker",
+        "texas-holdem",
+        "holdem",
+        "card-game",
+        "terminal-game",
+        "cli-game",
+        "tui",
+        "8-bit",
+        "pixel-art",
+        "game",
+        "ai-opponents",
+        "monte-carlo",
+        "developer-tools",
+        "fun",
+        "i18n"
+      ],
+      "tags": [
+        "claude-code",
+        "claude-code-plugin",
+        "claude",
+        "anthropic",
+        "poker",
+        "texas-holdem",
+        "holdem",
+        "card-game",
+        "terminal-game",
+        "cli-game",
+        "tui",
+        "8-bit",
+        "pixel-art",
+        "game",
+        "ai-opponents",
+        "monte-carlo",
+        "developer-tools",
+        "fun",
+        "i18n"
+      ]
+    }
+  ]
 }

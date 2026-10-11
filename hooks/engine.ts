@@ -1,20 +1,16 @@
-import type { Game, Level, Seat } from '../types'
+import type { Act, Entry, Game, Level, Seat } from '../types'
 
 // A card is rank * 4 + suit: rank 0..12 is 2..A, suit 0..3 is ♠♥♦♣.
 export const RANKS = '23456789TJQKA'
 export const SUITS = '♠♥♦♣'
 
-export const LEVEL_NAMES: Record<Level, string> = {
-  novice: 'Новичок',
-  medium: 'Средний',
-  pro: 'Профи',
-}
-
 export const STARTING_CHIPS = 1000
 const HANDS_PER_LEVEL = 10
-const BLINDS = [10, 15, 25, 40, 60, 100, 150, 250, 400, 600, 1000]
-const BOT_NAMES = ['Боб', 'Ева', 'Макс', 'Лиза', 'Гоша', 'Ника']
-const LOG_SIZE = 12
+/** How the small blind grows every HANDS_PER_LEVEL hands, as multiples of the starting one. */
+const BLIND_STEPS = [1, 1.5, 2.5, 4, 6, 10, 15, 25, 40, 60, 100]
+export const BUY_INS = [500, 1000, 2000, 5000, 10000]
+export const SMALL_BLINDS = [5, 10, 25, 50, 100]
+const LOG_SIZE = 60
 
 export type Action =
   | { kind: 'fold' }
@@ -31,24 +27,13 @@ export function isRed(card: number): boolean {
 
 // ---------- hand evaluation ----------
 
-const CATEGORY_NAMES = [
-  'Старшая карта',
-  'Пара',
-  'Две пары',
-  'Сет',
-  'Стрит',
-  'Флеш',
-  'Фулл-хаус',
-  'Каре',
-  'Стрит-флеш',
-]
 const BASE = 13 ** 5
 
-function score(category: number, ranks: number[]): number {
-  let value = category
-  for (let i = 0; i < 5; i++) value = value * 13 + (ranks[i] ?? 0)
-  return value
-}
+// The evaluator runs thousands of times per equity estimate, so it allocates nothing:
+// it counts into these buffers and packs the value as it goes.
+const counts = new Uint8Array(13)
+const suitMasks = new Int32Array(4)
+const suitCounts = new Uint8Array(4)
 
 function straightTop(mask: number): number {
   for (let top = 12; top >= 4; top--) {
@@ -59,91 +44,81 @@ function straightTop(mask: number): number {
   return (mask & wheel) === wheel ? 3 : -1
 }
 
-function topRanks(mask: number, count: number, skip: number[] = []): number[] {
-  const out: number[] = []
-  for (let r = 12; r >= 0 && out.length < count; r--) {
-    if (mask & (1 << r) && !skip.includes(r)) out.push(r)
+/** Appends the `count` highest ranks of `mask`, outside `skip`, to a packed value (zeros past the last). */
+function kickers(value: number, mask: number, count: number, skip = 0): number {
+  for (let r = 12; r >= 0 && count > 0; r--) {
+    if ((mask >> r) & 1 && !((skip >> r) & 1)) {
+      value = value * 13 + r
+      count--
+    }
   }
-  return out
+  for (; count > 0; count--) value *= 13
+  return value
 }
 
-/** Best five-card value of 5–7 cards; a higher number is a better hand. */
-export function evaluate(cards: number[]): number {
-  const counts = new Array<number>(13).fill(0)
-  const suitMasks = [0, 0, 0, 0]
-  const suitCounts = [0, 0, 0, 0]
+/** Pads a packed value to its five rank digits. */
+function pad(value: number, digits: number): number {
+  for (let k = digits; k < 5; k++) value *= 13
+  return value
+}
+
+/**
+ * Best five-card value of the first `length` cards (5–7); a higher number is a
+ * better hand: the category, then five ranks, as base-13 digits.
+ */
+export function evaluate(cards: ArrayLike<number>, length = cards.length): number {
+  counts.fill(0)
+  suitMasks.fill(0)
+  suitCounts.fill(0)
   let mask = 0
-  for (const c of cards) {
+  for (let i = 0; i < length; i++) {
+    const c = cards[i]!
     const r = c >> 2
-    const s = c & 3
     counts[r]!++
-    suitMasks[s]! |= 1 << r
-    suitCounts[s]!++
+    suitMasks[c & 3]! |= 1 << r
+    suitCounts[c & 3]!++
     mask |= 1 << r
   }
-  const flushSuit = suitCounts.findIndex(n => n >= 5)
-  if (flushSuit >= 0) {
-    const top = straightTop(suitMasks[flushSuit]!)
-    if (top >= 0) return score(8, [top])
+  let flush = -1
+  for (let su = 0; su < 4; su++) if (suitCounts[su]! >= 5) flush = su
+  if (flush >= 0) {
+    const top = straightTop(suitMasks[flush]!)
+    if (top >= 0) return pad(8 * 13 + top, 1)
   }
-  const quads: number[] = []
-  const trips: number[] = []
-  const pairs: number[] = []
+  let quad = -1
+  let trip = -1
+  let trip2 = -1
+  let pair = -1
+  let pair2 = -1
   for (let r = 12; r >= 0; r--) {
-    if (counts[r] === 4) quads.push(r)
-    else if (counts[r] === 3) trips.push(r)
-    else if (counts[r] === 2) pairs.push(r)
+    const n = counts[r]!
+    if (n === 4) quad = quad < 0 ? r : quad
+    else if (n === 3) {
+      if (trip < 0) trip = r
+      else if (trip2 < 0) trip2 = r
+    } else if (n === 2) {
+      if (pair < 0) pair = r
+      else if (pair2 < 0) pair2 = r
+    }
   }
-  if (quads.length > 0) {
-    const q = quads[0]!
-    return score(7, [q, ...topRanks(mask, 1, [q])])
-  }
-  if (trips.length > 0 && (trips.length > 1 || pairs.length > 0)) {
-    const t = trips[0]!
-    return score(6, [t, Math.max(trips[1] ?? -1, pairs[0] ?? -1)])
-  }
-  if (flushSuit >= 0) return score(5, topRanks(suitMasks[flushSuit]!, 5))
+  if (quad >= 0) return pad(kickers(7 * 13 + quad, mask, 1, 1 << quad), 2)
+  if (trip >= 0 && (trip2 >= 0 || pair >= 0)) return pad((6 * 13 + trip) * 13 + Math.max(trip2, pair), 2)
+  if (flush >= 0) return kickers(5, suitMasks[flush]!, 5)
   const straight = straightTop(mask)
-  if (straight >= 0) return score(4, [straight])
-  if (trips.length > 0) {
-    const t = trips[0]!
-    return score(3, [t, ...topRanks(mask, 2, [t])])
-  }
-  if (pairs.length >= 2) {
-    const [a, b] = [pairs[0]!, pairs[1]!]
-    return score(2, [a, b, ...topRanks(mask, 1, [a, b])])
-  }
-  if (pairs.length === 1) {
-    const p = pairs[0]!
-    return score(1, [p, ...topRanks(mask, 3, [p])])
-  }
-  return score(0, topRanks(mask, 5))
+  if (straight >= 0) return pad(4 * 13 + straight, 1)
+  if (trip >= 0) return pad(kickers(3 * 13 + trip, mask, 2, 1 << trip), 3)
+  if (pair2 >= 0) return pad(kickers((2 * 13 + pair) * 13 + pair2, mask, 1, (1 << pair) | (1 << pair2)), 3)
+  if (pair >= 0) return pad(kickers(1 * 13 + pair, mask, 3, 1 << pair), 4)
+  return kickers(0, mask, 5)
 }
 
 export function category(value: number): number {
   return Math.floor(value / BASE)
 }
 
-export function describe(value: number): string {
-  const cat = category(value)
-  const main = RANKS[Math.floor(value / 13 ** 4) % 13]!
-  const second = RANKS[Math.floor(value / 13 ** 3) % 13]!
-  switch (cat) {
-    case 0:
-    case 1:
-    case 3:
-    case 7:
-      return `${CATEGORY_NAMES[cat]} ${main}`
-    case 2:
-      return `Две пары ${main} и ${second}`
-    case 6:
-      return `Фулл-хаус ${main} на ${second}`
-    case 4:
-    case 8:
-      return `${CATEGORY_NAMES[cat]} до ${main}`
-    default:
-      return `Флеш, старшая ${main}`
-  }
+/** The ranks a hand's value is built from, highest first, for putting it into words. */
+export function ranksOf(value: number): number[] {
+  return [4, 3, 2, 1, 0].map(k => Math.floor(value / 13 ** k) % 13)
 }
 
 function shuffled<T>(cards: T[]): T[] {
@@ -155,29 +130,44 @@ function shuffled<T>(cards: T[]): T[] {
   return out
 }
 
+// Scratch space for equity: the unseen deck and the two seven-card hands compared.
+const rest = new Uint8Array(52)
+const mine = new Uint8Array(7)
+const theirs = new Uint8Array(7)
+
 /** Monte Carlo share of the pot against `opponents` random hands. */
 export function equity(hand: number[], board: number[], opponents: number, sims: number): number {
-  const used = new Set([...hand, ...board])
-  const rest: number[] = []
-  for (let c = 0; c < 52; c++) if (!used.has(c)) rest.push(c)
-  const need = opponents * 2 + (5 - board.length)
+  let seen = 0n
+  for (const c of hand) seen |= 1n << BigInt(c)
+  for (const c of board) seen |= 1n << BigInt(c)
+  let left = 0
+  for (let c = 0; c < 52; c++) if (!((seen >> BigInt(c)) & 1n)) rest[left++] = c
+  const runout = 5 - board.length
+  const need = opponents * 2 + runout
+  mine[0] = hand[0]!
+  mine[1] = hand[1]!
+  for (let k = 0; k < board.length; k++) mine[2 + k] = theirs[2 + k] = board[k]!
   let total = 0
   for (let s = 0; s < sims; s++) {
     for (let i = 0; i < need; i++) {
-      const j = i + Math.floor(Math.random() * (rest.length - i))
-      ;[rest[i], rest[j]] = [rest[j]!, rest[i]!]
+      const j = i + Math.floor(Math.random() * (left - i))
+      const swap = rest[i]!
+      rest[i] = rest[j]!
+      rest[j] = swap
     }
-    const full = board.concat(rest.slice(opponents * 2, need))
-    const mine = evaluate(hand.concat(full))
+    for (let k = 0; k < runout; k++) mine[2 + board.length + k] = theirs[2 + board.length + k] = rest[opponents * 2 + k]!
+    const me = evaluate(mine, 7)
     let ties = 1
     let isBeaten = false
     for (let o = 0; o < opponents; o++) {
-      const theirs = evaluate([rest[o * 2]!, rest[o * 2 + 1]!, ...full])
-      if (theirs > mine) {
+      theirs[0] = rest[o * 2]!
+      theirs[1] = rest[o * 2 + 1]!
+      const value = evaluate(theirs, 7)
+      if (value > me) {
         isBeaten = true
         break
       }
-      if (theirs === mine) ties++
+      if (value === me) ties++
     }
     if (!isBeaten) total += 1 / ties
   }
@@ -208,8 +198,9 @@ export function pot(g: Game): number {
   return g.seats.reduce((sum, s) => sum + s.total, 0)
 }
 
-function say(g: Game, line: string) {
-  g.log.push(line)
+function say(g: Game, entry: Entry) {
+  g.logCount = (g.logCount ?? g.log.length) + 1
+  g.log.push(entry)
   if (g.log.length > LOG_SIZE) g.log.splice(0, g.log.length - LOG_SIZE)
 }
 
@@ -240,11 +231,17 @@ function put(s: Seat, amount: number): number {
   return paid
 }
 
-export function newGame(level: Level, bots: number): Game {
+/** A new table; `names` are the bots' names in the person's language, shuffled here. */
+export function newGame(
+  level: Level,
+  bots: number,
+  names: string[],
+  setup: { you: string; buyIn: number; sb: number } = { you: '', buyIn: STARTING_CHIPS, sb: 10 },
+): Game {
   const seat = (name: string, isHuman: boolean): Seat => ({
     name,
     isHuman,
-    chips: STARTING_CHIPS,
+    chips: setup.buyIn,
     hand: [],
     bet: 0,
     total: 0,
@@ -252,12 +249,12 @@ export function newGame(level: Level, bots: number): Game {
     isAllIn: false,
     isOut: false,
     hasActed: false,
-    lastAction: '',
+    lastAction: null,
   })
-  const names = shuffled(BOT_NAMES).slice(0, Math.max(1, Math.min(6, bots)))
+  const picked = shuffled(names).slice(0, Math.max(1, Math.min(6, bots)))
   const g: Game = {
     level,
-    seats: [seat('Вы', true), ...names.map(name => seat(name, false))],
+    seats: [seat(setup.you.trim().slice(0, 12), true), ...picked.map(name => seat(name, false))],
     deck: [],
     board: [],
     dealer: 0,
@@ -265,25 +262,31 @@ export function newGame(level: Level, bots: number): Game {
     street: 'done',
     currentBet: 0,
     minRaise: 0,
-    sb: BLINDS[0]!,
-    bb: BLINDS[0]! * 2,
+    sb: setup.sb,
+    bb: setup.sb * 2,
     handNo: 0,
     log: [],
+    logCount: 0,
     isShowdown: false,
     isOver: false,
     reads: { hands: 0, raises: 0, calls: 0, folds: 0 },
+    startChips: setup.buyIn,
+    buyIn: setup.buyIn,
+    blindBase: setup.sb,
+    outcome: null,
+    isResultShown: false,
   }
   g.dealer = Math.floor(Math.random() * g.seats.length)
   return startHand(g)
 }
 
-/** Deals the next hand and plays the bots up to the person's turn. */
+/** Deals the next hand; the bots then move one `stepBot` at a time. */
 export function startHand(g: Game): Game {
   if (g.isOver) return g
   for (const s of g.seats) {
     if (!s.isOut && s.chips === 0) {
       s.isOut = true
-      if (g.handNo > 0) say(g, `${s.name} выбывает`)
+      if (g.handNo > 0) say(g, { k: 'out', seat: g.seats.indexOf(s) })
     }
   }
   const me = g.seats[0]!
@@ -291,13 +294,17 @@ export function startHand(g: Game): Game {
   if (me.isOut || alive.length === 1) {
     g.isOver = true
     g.street = 'done'
-    say(g, me.isOut ? 'Фишки закончились — игра окончена' : 'Все соперники разорены — победа!')
+    say(g, { k: 'over', isWon: !me.isOut })
     return g
   }
   g.handNo++
-  const step = Math.min(BLINDS.length - 1, Math.floor((g.handNo - 1) / HANDS_PER_LEVEL))
-  if (BLINDS[step]! !== g.sb && g.handNo > 1) say(g, `Блайнды растут: ${BLINDS[step]}/${BLINDS[step]! * 2}`)
-  g.sb = BLINDS[step]!
+  g.startChips = me.chips
+  g.outcome = null
+  g.isResultShown = false
+  const step = Math.min(BLIND_STEPS.length - 1, Math.floor((g.handNo - 1) / HANDS_PER_LEVEL))
+  const sb = Math.round((g.blindBase ?? 10) * BLIND_STEPS[step]!)
+  if (sb !== g.sb && g.handNo > 1) say(g, { k: 'blinds', sb, bb: sb * 2 })
+  g.sb = sb
   g.bb = g.sb * 2
   for (const s of g.seats) {
     s.hand = []
@@ -306,21 +313,20 @@ export function startHand(g: Game): Game {
     s.isFolded = s.isOut
     s.isAllIn = false
     s.hasActed = false
-    s.lastAction = ''
+    s.lastAction = null
   }
   g.deck = shuffled(Array.from({ length: 52 }, (_, i) => i))
   g.board = []
   g.isShowdown = false
   g.street = 'preflop'
-  g.log = g.log.slice(-2)
-  say(g, `— Раздача #${g.handNo} —`)
+  say(g, { k: 'hand', n: g.handNo })
   g.dealer = nextAlive(g, g.dealer)
   const sbSeat = alive.length === 2 ? g.dealer : nextAlive(g, g.dealer)
   const bbSeat = nextAlive(g, sbSeat)
   put(g.seats[sbSeat]!, g.sb)
   put(g.seats[bbSeat]!, g.bb)
-  g.seats[sbSeat]!.lastAction = `SB ${g.seats[sbSeat]!.bet}`
-  g.seats[bbSeat]!.lastAction = `BB ${g.seats[bbSeat]!.bet}`
+  g.seats[sbSeat]!.lastAction = { k: 'sb', n: g.seats[sbSeat]!.bet }
+  g.seats[bbSeat]!.lastAction = { k: 'bb', n: g.seats[bbSeat]!.bet }
   g.currentBet = g.bb
   g.minRaise = g.bb
   for (let round = 0; round < 2; round++) {
@@ -333,10 +339,10 @@ export function startHand(g: Game): Game {
   g.reads.hands++
   g.toAct = nextActor(g, bbSeat)
   if (g.toAct < 0) advance(g)
-  return runBots(g)
+  return g
 }
 
-/** The person's move: applies it and plays the bots up to their next turn. */
+/** The person's move. */
 export function play(g: Game, action: Action): Game {
   if (g.street === 'done' || g.toAct !== 0) return g
   const me = g.seats[0]!
@@ -345,33 +351,34 @@ export function play(g: Game, action: Action): Game {
   else if (action.kind === 'raise') g.reads.raises++
   else if (toCall > 0) g.reads.calls++
   act(g, 0, action)
-  return runBots(g)
+  return g
 }
 
-function runBots(g: Game): Game {
-  for (let guard = 0; guard < 500 && g.street !== 'done'; guard++) {
-    if (g.toAct < 0) {
-      advance(g)
-      continue
-    }
-    if (g.seats[g.toAct]!.isHuman) break
-    act(g, g.toAct, decide(g, g.toAct))
-  }
+/** Whether the hand waits on a bot rather than on the person. */
+export function needsBots(g: Game): boolean {
+  return g.street !== 'done' && (g.toAct < 0 || !g.seats[g.toAct]!.isHuman)
+}
+
+/** One bot's move, so the table can show each one in turn. */
+export function stepBot(g: Game): Game {
+  if (!needsBots(g)) return g
+  if (g.toAct < 0) advance(g)
+  else act(g, g.toAct, decide(g, g.toAct))
   return g
 }
 
 function act(g: Game, i: number, action: Action) {
   const s = g.seats[i]!
   const toCall = g.currentBet - s.bet
-  let label: string
+  let label: Act
   if (action.kind === 'fold') {
     s.isFolded = true
-    label = 'фолд'
+    label = { k: 'fold' }
   } else if (action.kind === 'call' || action.to <= g.currentBet) {
-    if (toCall <= 0) label = 'чек'
+    if (toCall <= 0) label = { k: 'check' }
     else {
       const paid = put(s, toCall)
-      label = s.isAllIn ? `олл-ин ${s.bet}` : `колл ${paid}`
+      label = s.isAllIn ? { k: 'allin', n: s.bet } : { k: 'call', n: paid }
     }
   } else {
     const most = s.bet + s.chips
@@ -386,11 +393,11 @@ function act(g: Game, i: number, action: Action) {
     g.currentBet = to
     put(s, to - s.bet)
     for (const other of g.seats) if (other !== s && canAct(other)) other.hasActed = false
-    label = s.isAllIn ? `олл-ин ${to}` : wasOpen ? `бет ${to}` : `рейз до ${to}`
+    label = s.isAllIn ? { k: 'allin', n: to } : wasOpen ? { k: 'bet', n: to } : { k: 'raise', n: to }
   }
   s.hasActed = true
   s.lastAction = label
-  say(g, `${s.name}: ${label}`)
+  say(g, { k: 'act', seat: i, act: label })
   advance(g)
 }
 
@@ -401,9 +408,11 @@ function advance(g: Game) {
     const amount = pot(g)
     winner.chips += amount
     for (const s of g.seats) s.total = 0
-    say(g, `${winner.name} забирает банк ${amount}`)
+    say(g, { k: 'takes', seat: g.seats.indexOf(winner), n: amount })
     g.street = 'done'
     g.toAct = -1
+    g.outcome = { byFold: true, winners: [{ seat: g.seats.indexOf(winner), amount }], shown: [] }
+    finishHand(g)
     return
   }
   const actors = g.seats.filter(canAct)
@@ -418,7 +427,7 @@ function advance(g: Game) {
   for (const s of g.seats) {
     s.bet = 0
     s.hasActed = false
-    if (!s.isFolded && !s.isAllIn) s.lastAction = ''
+    if (!s.isFolded && !s.isAllIn) s.lastAction = null
   }
   g.currentBet = 0
   g.minRaise = g.bb
@@ -429,7 +438,7 @@ function advance(g: Game) {
   const deal = g.street === 'preflop' ? 3 : 1
   for (let k = 0; k < deal; k++) g.board.push(g.deck.pop()!)
   g.street = g.street === 'preflop' ? 'flop' : g.street === 'flop' ? 'turn' : 'river'
-  say(g, `${g.street === 'flop' ? 'Флоп' : g.street === 'turn' ? 'Тёрн' : 'Ривер'}: ${g.board.map(cardText).join(' ')}`)
+  say(g, { k: 'street', street: g.street, cards: g.board.slice() })
   g.toAct = nextActor(g, g.dealer)
 }
 
@@ -455,16 +464,34 @@ function showdown(g: Game) {
     winners.forEach((i, k) => (won[i]! += share + (k === 0 ? slice - share * winners.length : 0)))
     floor = level
   })
+  g.outcome = {
+    byFold: false,
+    winners: won.flatMap((amount, seat) => (amount > 0 ? [{ seat, amount }] : [])),
+    shown: g.seats.flatMap((s, seat) => (inHand(s) ? [{ seat, value: values[seat]! }] : [])),
+  }
   g.seats.forEach((s, i) => {
-    if (inHand(s)) say(g, `${s.name}: ${s.hand.map(cardText).join(' ')} — ${describe(values[i]!)}`)
+    if (inHand(s)) say(g, { k: 'shows', seat: i, value: values[i]!, cards: s.hand.slice() })
   })
   g.seats.forEach((s, i) => {
     s.total = 0
     if (won[i]! > 0) {
       s.chips += won[i]!
-      say(g, `${s.name} выигрывает ${won[i]}`)
+      say(g, { k: 'wins', seat: i, n: won[i]! })
     }
   })
+  finishHand(g)
+}
+
+/** Ends the game the moment the person or every bot is out of chips. */
+function finishHand(g: Game) {
+  const me = g.seats[0]!
+  if (me.chips === 0) {
+    g.isOver = true
+    say(g, { k: 'over', isWon: false })
+  } else if (g.seats.slice(1).every(s => s.chips === 0)) {
+    g.isOver = true
+    say(g, { k: 'over', isWon: true })
+  }
 }
 
 // ---------- bots ----------
