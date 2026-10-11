@@ -30,7 +30,6 @@
 
 <p align="center">
   <img src="docs/win.png" alt="A YOU WIN banner with confetti over the poker table" width="420">
-  <img src="docs/menu.png" alt="Claude Poker menu: logo, table setup and skill levels" width="420">
 </p>
 
 ## 📦 Install
