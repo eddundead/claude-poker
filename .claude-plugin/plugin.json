@@ -1,6 +1,6 @@
 {
   "name": "poker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Claude Poker — 8-bit Texas Hold'em in a Claude Code side pane: 1–6 AI opponents, three skill levels, win odds, 10 languages. By Edd.",
   "author": {
     "name": "Edd"
