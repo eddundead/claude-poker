@@ -1,0 +1,7 @@
+{
+  "name": "poker",
+  "version": "0.1.0",
+  "description": "Техасский холдем в панели Claude Code: 1–6 ботов, три уровня сложности",
+  "author": { "name": "ed" },
+  "types": "./types/index.d.ts"
+}

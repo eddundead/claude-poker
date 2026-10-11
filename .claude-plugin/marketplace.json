@@ -1,0 +1,6 @@
+{
+  "name": "claude-poker",
+  "owner": { "name": "ed" },
+  "description": "Техасский холдем в панели Claude Code",
+  "plugins": [{ "name": "poker", "source": "./" }]
+}
